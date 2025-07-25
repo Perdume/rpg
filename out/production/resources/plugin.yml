@@ -1,0 +1,43 @@
+name: Rpg
+version: '1.0'
+main: Perdume.rpg.Rpg
+api-version: '1.21.4'
+author: Perdume
+
+depend: [Vault] # 이 줄을 추가합니다.
+
+commands:
+  # [수정] 강화
+  강화:
+    description: 강화 시스템을 엽니다.
+    aliases: [reinforce, enf]
+
+  # [수정] 보상
+  보상:
+    description: 보상 수령함을 엽니다.
+    aliases: [reward]
+
+  # [수정] 파티
+  파티:
+    description: 파티를 관리합니다.
+    aliases: [party, p]
+
+  # [수정] 레이드
+  레이드:
+    description: 레이드를 시작합니다.
+    aliases: [raid]
+    permission: rpg.raid.start
+
+  # 관리자용 명령어는 편의를 위해 영어 유지
+  rpworld:
+    description: RPG 월드를 관리합니다.
+    aliases: [rpgworld, wa]
+    permission: rpg.admin
+  rpgtest:
+    description: RPG 시스템을 테스트합니다.
+    aliases: [rt]
+    permission: rpg.admin
+  setreinforce:
+    description: 아이템의 강화 레벨을 설정합니다.
+    aliases: [sr]
+    permission: rpg.admin.setreinforce
