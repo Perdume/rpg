@@ -5,6 +5,7 @@ import Perdume.rpg.party.Party;
 import Perdume.rpg.party.PartyManager;
 import Perdume.rpg.player.data.PlayerDataManager;
 import Perdume.rpg.raid.boss.Boss;
+import Perdume.rpg.system.RaidErrorHandler;
 import Perdume.rpg.system.RaidManager;
 import Perdume.rpg.util.TeleportUtil;
 import org.bukkit.*;
@@ -131,42 +132,59 @@ public class RaidInstance {
         this.currentState = RaidState.RUNNING;
         broadcastMessage("§c[알림] §4전투가 시작되었습니다!");
 
+        // 1. 보스 소환
         Location bossSpawn = new Location(raidWorld, 0.5, 65, 0.5);
         this.boss.spawn(this, bossSpawn);
-        getOnlinePlayers().forEach(p -> {
-            plugin.getAttributeListener().applyRaidAttributes(p);
-            double maxHealth = p.getAttribute(Attribute.MAX_HEALTH).getValue();
-            p.setHealth(maxHealth);
-            p.setFoodLevel(20);
-        });
 
+        // 2. 플레이어 스탯 적용
+        getOnlinePlayers().forEach(p -> plugin.getAttributeListener().applyRaidAttributes(p));
+
+        // 3. 메인 게임 타이머 시작
         this.gameTimer = new BukkitRunnable() {
             @Override
             public void run() {
-                if (currentState != RaidState.RUNNING) { this.cancel(); return; }
-
-                boss.onTick();
-
-                if (timeElapsed % 20 == 0) {
+                // --- [핵심] 치명적 오류 감지 시스템 ---
+                try {
+                    if (currentState != RaidState.RUNNING) {
+                        this.cancel();
+                        return;
+                    }
                     timeLeft--;
+                    timeElapsed++;
+
+                    // 보스의 AI 로직은 얘기치 못한 오류를 발생시킬 가능성이 가장 높습니다.
+                    boss.onTick();
+
+                    // 보스바 업데이트
                     if (!boss.isDead()) {
                         double healthPercent = boss.getCurrentHealth() / boss.getMaxHealth();
+                        // RaidInstance가 직접 관리하는 bossBar를 업데이트합니다.
                         bossBar.setProgress(Math.max(0, healthPercent));
                         bossBar.setTitle(String.format("§c%s §e남은 시간: %d분 %d초",
                                 boss.getBaseName(), timeLeft / 60, timeLeft % 60));
                     }
 
+                    // 종료 조건 확인
+                    if (boss.isDead()) {
+                        end(true);
+                        return;
+                    }
                     if (timeLeft <= 0) {
                         broadcastMessage("§c[알림] §4제한 시간이 초과되어 레이드에 실패했습니다.");
                         end(false);
                         return;
                     }
-                }
+                    if (getOnlinePlayers().isEmpty()) {
+                        end(false);
+                    }
 
-                timeElapsed++;
-                if (getOnlinePlayers().isEmpty()) { end(false); }
+                } catch (Exception e) {
+                    // [핵심] 어떤 오류든 감지되면, RaidErrorHandler를 통해 안전하게 레이드를 종료합니다.
+                    RaidErrorHandler.handle(RaidInstance.this, e);
+                    this.cancel(); // 이 타이머를 즉시 중지합니다.
+                }
             }
-        }.runTaskTimer(plugin, 0L, 1L);
+        }.runTaskTimer(plugin, 0L, 20L); // 1초마다 반복
     }
 
     /**
