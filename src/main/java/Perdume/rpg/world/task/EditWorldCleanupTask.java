@@ -3,7 +3,7 @@ package Perdume.rpg.world.task;
 
 import Perdume.rpg.Rpg;
 import Perdume.rpg.world.command.WorldAdminCommand;
-import Perdume.rpg.world.manager.WorldManager;
+import Perdume.rpg.world.WorldManager;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Player;

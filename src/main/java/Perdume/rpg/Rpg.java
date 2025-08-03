@@ -1,29 +1,34 @@
 package Perdume.rpg;
 
 
-import Perdume.rpg.party.PartyCommand;
-import Perdume.rpg.player.data.PlayerDataManager;
-import Perdume.rpg.player.listener.CombatListener;
-import Perdume.rpg.raid.RaidCommand;
+import Perdume.rpg.command.IslandCommand;
+import Perdume.rpg.command.SpawnCommand;
+import Perdume.rpg.config.ConfigManager;
+import Perdume.rpg.core.party.PartyCommand;
+import Perdume.rpg.core.player.data.PlayerDataManager;
+import Perdume.rpg.core.player.listener.CombatListener;
+import Perdume.rpg.gamemode.raid.RaidCommand;
 import Perdume.rpg.command.SetReinforceCommand;
 import Perdume.rpg.command.TestCommand;
 import Perdume.rpg.enhancement.command.ReinforceCommand;
 import Perdume.rpg.enhancement.listener.ReinforceListener;
-import Perdume.rpg.player.listener.AttributeListener;
-import Perdume.rpg.player.listener.CraftingListener;
-import Perdume.rpg.player.listener.RaidSessionListener;
-import Perdume.rpg.raid.boss.BossFactory;
-import Perdume.rpg.raid.listener.BossDeathListener;
-import Perdume.rpg.raid.listener.RaidGUIListener;
-import Perdume.rpg.reward.RewardCommand;
-import Perdume.rpg.reward.listener.RewardClaimListener;
-import Perdume.rpg.reward.manager.RewardManager;
+import Perdume.rpg.core.player.listener.AttributeListener;
+import Perdume.rpg.core.player.listener.CraftingListener;
+import Perdume.rpg.core.player.listener.RaidSessionListener;
+import Perdume.rpg.gamemode.raid.listener.BossDeathListener;
+import Perdume.rpg.gamemode.raid.listener.RaidGUIListener;
+import Perdume.rpg.core.reward.RewardCommand;
+import Perdume.rpg.core.reward.listener.RewardClaimListener;
+import Perdume.rpg.core.reward.manager.RewardManager;
+import Perdume.rpg.listener.SpawnGUIListener;
 import Perdume.rpg.system.RaidManager;
+import Perdume.rpg.system.SkyblockManager;
 import Perdume.rpg.world.command.WorldAdminCommand;
 import Perdume.rpg.world.gui.EditSessionListener;
-import Perdume.rpg.world.manager.WorldManager;
+import Perdume.rpg.world.WorldManager;
 import Perdume.rpg.world.task.EditWorldCleanupTask;
 import net.milkbowl.vault.economy.Economy;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -52,6 +57,8 @@ public final class Rpg extends JavaPlugin implements Listener {
     private CombatListener combatListener;
     private RewardManager rewardManager;
     private PlayerDataManager playerDataManager;
+    private SkyblockManager skyblockManager;
+    private ConfigManager configManager;
 
     public static Economy econ = null;
 
@@ -110,26 +117,48 @@ public final class Rpg extends JavaPlugin implements Listener {
     }
 
     private void initializeTemplateWorlds() {
-        log.info("레이드 템플릿 월드 초기화를 시작합니다...");
-        for (String bossId : BOSS_LIST) {
-            if (BossFactory.isValidBossId(bossId, this)) {
-                if (WorldManager.createVoidTemplate(bossId)) {
+        log.info("필수 템플릿 월드 초기화를 시작합니다...");
+
+        // --- 1. 레이드 보스 템플릿 확인 ---
+        FileConfiguration config = getConfig();
+        List<String> bossIds = config.getStringList("raid-bosses");
+
+        if (bossIds.isEmpty()) {
+            log.warning("'config.yml'에 raid-bosses 목록이 비어있습니다.");
+        } else {
+            log.info("레이드 템플릿 월드를 확인합니다...");
+            for (String bossId : bossIds) {
+                // "raid" 타입으로 공허 템플릿 생성 시도
+                if (WorldManager.createVoidTemplate(bossId, "raid")) {
                     log.info("- '" + bossId + "' 템플릿 월드 확인/생성 완료.");
                 } else {
                     log.severe("- '" + bossId + "' 템플릿 월드 생성 실패!");
                 }
-            } else {
-                log.warning("- 보스 ID '" + bossId + "'는 존재하지만, BossFactory에 등록되지 않았습니다.");
             }
         }
-        log.info("레이드 템플릿 월드 초기화 완료.");
+
+        // --- 2. 스카이블럭 '기본 섬' 템플릿 확인 ---
+        log.info("스카이블럭 템플릿 월드를 확인합니다...");
+        String islandTemplateName = "island_template";
+        // "island" 타입으로 공허 템플릿 생성 시도
+        if (WorldManager.createVoidTemplate(islandTemplateName, "island")) {
+            log.info("- '" + islandTemplateName + "' 템플릿 월드 확인/생성 완료.");
+        } else {
+            log.severe("- '" + islandTemplateName + "' 템플릿 월드 생성 실패!");
+        }
+
+        log.info("모든 템플릿 월드 초기화가 완료되었습니다.");
     }
+
+
 
     private void initializeSystems() {
         this.raidManager = new RaidManager(this);
         this.attributeListener = new AttributeListener(this);
         this.combatListener = new CombatListener(this);
         this.rewardManager = new RewardManager(this);
+        this.skyblockManager = new SkyblockManager(this);
+        this.configManager = new ConfigManager(this);
     }
 
     private void cleanupTemporaryWorlds() {
@@ -183,6 +212,9 @@ public final class Rpg extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new EditSessionListener(this, worldAdminCommand), this);
         new EditWorldCleanupTask(this, worldAdminCommand).runTaskTimer(this, 0L, 6000L);
 
+        getCommand("스폰").setExecutor(new SpawnCommand()); // /스폰 명령어 등록
+        getServer().getPluginManager().registerEvents(new SpawnGUIListener(), this); // GUI 리스너 등록
+
         // --- 테스트 시스템 ---
         getCommand("rpgtest").setExecutor(new TestCommand(this));
 
@@ -191,6 +223,9 @@ public final class Rpg extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(this.combatListener, this);
         getServer().getPluginManager().registerEvents(new CraftingListener(), this);
         // getServer().getPluginManager().registerEvents(new GlobalRespawnListener(this), this); // 필요 시 활성화
+
+        // --- ISLAND ---
+        getCommand("섬").setExecutor(new IslandCommand(this)); // /섬 명령어 등록
     }
     private boolean setupEconomy() {
         if (getServer().getPluginManager().getPlugin("Vault") == null) return false;
@@ -206,4 +241,8 @@ public final class Rpg extends JavaPlugin implements Listener {
     public AttributeListener getAttributeListener() { return attributeListener; }
     public CombatListener getCombatListener() {return combatListener;}
     public RewardManager getRewardManager() {return rewardManager;}
+    public SkyblockManager getSkyblockManager() {
+        return this.skyblockManager;
+    }
+    public ConfigManager getConfigManager() { return configManager; }
 }

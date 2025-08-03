@@ -1,0 +1,12 @@
+# RPG Plugin Locations File
+# Use /spawnadmin set <id> to add new spawn points here automatically.
+
+spawn-locations:
+# Example:
+# prontera:
+#   world: "world"
+#   x: 150.5
+#   y: 68.0
+#   z: -200.5
+#   yaw: 90.0
+#   pitch: 0.0

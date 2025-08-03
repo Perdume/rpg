@@ -2,8 +2,8 @@ package Perdume.rpg.world.command; // 사용하시는 패키지 경로
 
 import Perdume.rpg.Rpg;
 
-import Perdume.rpg.util.TeleportUtil;
-import Perdume.rpg.world.manager.WorldManager;
+import Perdume.rpg.core.util.TeleportUtil;
+import Perdume.rpg.world.WorldManager;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -16,6 +16,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.StringUtil;
 
+import java.io.File;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -26,7 +27,7 @@ public class WorldAdminCommand implements CommandExecutor, TabCompleter {
     public static final Map<UUID, EditSession> editingPlayers = new HashMap<>();
     private int nextEditId = 1;
 
-    public record EditSession(String worldName, String templateName, Location originalLocation) {}
+    public record EditSession(String worldName, String templateName, String type, Location originalLocation) {}
 
     public WorldAdminCommand(Rpg plugin) {
         this.plugin = plugin;
@@ -71,42 +72,50 @@ public class WorldAdminCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
-    /**
-     * '/rpworld' 명령어 입력 시 Tab 키를 눌렀을 때, 자동 완성 목록을 보여줍니다.
-     */
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (!sender.hasPermission("rpg.admin")) return Collections.emptyList();
 
         List<String> completions = new ArrayList<>();
-        // 첫 번째 인자 (서브 명령어) 자동 완성
+        // 첫 번째 인자 (서브 명령어)
         if (args.length == 1) {
-            StringUtil.copyPartialMatches(args[0], Arrays.asList("create", "delete", "edit", "save", "leave", "list", "tp"), completions);
+            StringUtil.copyPartialMatches(args[0],
+                    Arrays.asList("create", "delete", "edit", "save", "leave", "list", "tp"), completions);
         }
-        // 두 번째 인자 (월드 이름) 자동 완성
+        // 두 번째 인자 (월드 타입)
         else if (args.length == 2) {
-            if (Arrays.asList("delete", "edit", "tp").contains(args[0].toLowerCase())) {
-                StringUtil.copyPartialMatches(args[1], plugin.getConfig().getStringList("raid-bosses"), completions);
+            if (Arrays.asList("create", "list", "delete", "edit", "tp").contains(args[0].toLowerCase())) {
+                StringUtil.copyPartialMatches(args[1], List.of("raid", "island"), completions);
             }
         }
-        // 세 번째 인자 (삭제 확인) 자동 완성
-        else if (args.length == 3 && args[0].equalsIgnoreCase("delete")) {
-             StringUtil.copyPartialMatches(args[2], List.of("confirm"), completions);
+        // 세 번째 인자 (템플릿 월드 이름)
+        else if (args.length == 3) {
+            if (Arrays.asList("delete", "edit", "tp").contains(args[0].toLowerCase())) {
+                String type = args[1].toLowerCase();
+                // 'worlds/[type]/' 폴더 경로를 지정합니다.
+                File templateDir = new File(plugin.getDataFolder(), "worlds/" + type);
+                if (templateDir.exists() && templateDir.isDirectory()) {
+                    // 폴더 안에 있는 모든 파일(폴더)의 이름을 가져옵니다.
+                    String[] files = templateDir.list();
+                    if (files != null) {
+                        StringUtil.copyPartialMatches(args[2], Arrays.asList(files), completions);
+                    }
+                }
+            }
         }
         return completions;
     }
 
-    // --- 각 서브 명령어 처리 메소드 ---
-
     private void handleCreate(CommandSender sender, String[] args) {
-        if (args.length < 2) { sender.sendMessage("§c사용법: /wa create <월드이름>"); return; }
-        String worldName = args[1];
+        if (args.length < 3) { sender.sendMessage("§c사용법: /wa create <type> <월드이름>"); return; }
+        String type = args[1].toLowerCase();
+        String worldName = args[2];
 
-        sender.sendMessage("§e공허 월드 '" + worldName + "' 생성을 시작합니다...");
-        if (WorldManager.createVoidTemplate(worldName)) {
-            sender.sendMessage("§a성공적으로 생성되었습니다! /wa edit " + worldName + " 명령어로 수정하세요.");
+        sender.sendMessage("§e'" + type + "' 타입의 공허 월드 '" + worldName + "' 생성을 시작합니다...");
+        if (WorldManager.createVoidTemplate(worldName, type)) {
+            sender.sendMessage("§a성공적으로 생성되었습니다!");
         } else {
-            sender.sendMessage("§c월드 생성에 실패했습니다. 이미 존재하거나 이름이 잘못되었을 수 있습니다.");
+            sender.sendMessage("§c월드 생성에 실패했습니다.");
         }
     }
 
@@ -132,27 +141,32 @@ public class WorldAdminCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleTeleportOrEdit(Player player, String[] args, boolean isEditMode) {
-        if (args.length < 2) {
-            player.sendMessage("§c사용법: /wa " + (isEditMode ? "edit" : "tp") + " <템플릿_맵이름>");
-            return;
-        }
-        String templateName = args[1];
+        if (args.length < 3) { player.sendMessage("§c사용법: /wa " + (isEditMode ? "edit" : "tp") + " <type> <템플릿_맵이름>"); return; }
+        String type = args[1].toLowerCase();
+        String templateName = args[2];
 
         if (isEditMode) {
             if (editingPlayers.containsKey(player.getUniqueId())) {
-                player.sendMessage("§c이미 수정 중인 맵이 있습니다. 먼저 종료해주세요.");
+                player.sendMessage("§c이미 수정 중인 맵이 있습니다.");
                 return;
             }
-            String editWorldName = "Raid--EDIT--" + Integer.hashCode(nextEditId++);
+            String prefix = switch (type) {
+                case "island" -> "Island--EDIT--";
+                case "raid" -> "Raid--EDIT--";
+                default -> "Temp--EDIT--"; // 알 수 없는 타입일 경우
+            };
+            String editWorldName = prefix + Integer.hashCode(nextEditId++);
             player.sendMessage("§e맵 '" + templateName + "'의 수정용 복사본(" + editWorldName + ")을 생성합니다...");
-            WorldManager.copyAndLoadWorld(editWorldName, templateName, (newWorld) -> {
+
+            WorldManager.copyAndLoadWorld(editWorldName, templateName, type, (newWorld) -> {
                 if (newWorld != null) {
-                    editingPlayers.put(player.getUniqueId(), new EditSession(editWorldName, templateName, player.getLocation()));
+                    // [핵심] 수정 세션을 시작하며, 월드의 'type'을 함께 저장합니다.
+                    editingPlayers.put(player.getUniqueId(), new EditSession(editWorldName, templateName, type, player.getLocation()));
                     player.teleport(new Location(newWorld, 0.5, 65, 0.5));
                     player.setGameMode(GameMode.CREATIVE);
-                    player.sendMessage("§a맵 수정 모드로 진입했습니다. 끝나면 /wa save 또는 /wa leave를 사용해주세요.");
+                    player.sendMessage("§a맵 수정 모드로 진입했습니다.");
                 } else {
-                    player.sendMessage("§c맵 생성에 실패했습니다. 템플릿 맵 이름이 정확한지 확인해주세요.");
+                    player.sendMessage("§c맵 생성에 실패했습니다.");
                 }
             });
         } else { // 단순 텔레포트
@@ -168,13 +182,21 @@ public class WorldAdminCommand implements CommandExecutor, TabCompleter {
 
     public void handleSave(Player player, Consumer<Boolean> afterSaveAction) {
         EditSession session = editingPlayers.get(player.getUniqueId());
-        if (session == null) { /* ... */ return; }
+        if (session == null) {
+            if (player.isOnline()) player.sendMessage("§c수정 중인 맵이 없습니다.");
+            afterSaveAction.accept(false);
+            return;
+        }
 
         World editWorld = Bukkit.getWorld(session.worldName());
-        if (editWorld == null) { /* ... */ return; }
+        if (editWorld == null) {
+            if (player.isOnline()) player.sendMessage("§c오류: 수정 중인 월드를 찾을 수 없습니다!");
+            editingPlayers.remove(player.getUniqueId());
+            afterSaveAction.accept(false);
+            return;
+        }
 
-        if (player.isOnline()) player.sendMessage("§e변경사항을 저장하고 원래 위치로 돌아갑니다...");
-
+        if (player.isOnline()) player.sendMessage("§e변경사항을 원본 템플릿 '" + session.templateName() + "'에 저장하고 원래 위치로 돌아갑니다...");
         // 1. 플레이어를 먼저 안전하게 귀환
         TeleportUtil.returnPlayerToSafety(player, session.originalLocation());
         editingPlayers.remove(player.getUniqueId());
@@ -184,7 +206,7 @@ public class WorldAdminCommand implements CommandExecutor, TabCompleter {
             @Override
             public void run() {
                 if (editWorld.getPlayers().isEmpty()) {
-                    WorldManager.saveAndOverwriteTemplate(editWorld, session.templateName(), (success) -> {
+                    WorldManager.saveAndOverwriteTemplate(editWorld, session.templateName(), session.type(), (success) -> {
                         if (player.isOnline()) {
                             if (success) player.sendMessage("§a성공적으로 저장되었습니다!");
                             else player.sendMessage("§c저장에 실패했습니다.");

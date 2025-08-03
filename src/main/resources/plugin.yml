@@ -28,6 +28,10 @@ commands:
     aliases: [raid]
     permission: rpg.raid.start
 
+  섬:
+    description: 섬 관련 명령어
+    aliases: [island, is]
+
   # 관리자용 명령어는 편의를 위해 영어 유지
   rpworld:
     description: RPG 월드를 관리합니다.

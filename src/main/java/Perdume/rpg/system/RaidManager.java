@@ -1,11 +1,10 @@
 package Perdume.rpg.system;
 
 import Perdume.rpg.Rpg;
-import Perdume.rpg.raid.RaidInstance;
-import Perdume.rpg.raid.boss.Boss;
-import Perdume.rpg.raid.boss.BossFactory;
-import Perdume.rpg.world.manager.WorldManager;
-import org.bukkit.Bukkit;
+import Perdume.rpg.gamemode.raid.RaidInstance;
+import Perdume.rpg.gamemode.raid.boss.Boss;
+import Perdume.rpg.gamemode.raid.boss.BossFactory;
+import Perdume.rpg.world.WorldManager;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
@@ -13,6 +12,7 @@ import java.io.File;
 import java.util.*;
 
 public class RaidManager {
+
 
     private final Rpg plugin;
     private final List<RaidInstance> activeRaids = new ArrayList<>();
@@ -39,9 +39,9 @@ public class RaidManager {
             return;
         }
 
-        String instanceWorldName = "Raid--RUN--" + nextRaidId++;
+        String instanceWorldName = "Raid--RUN--" + Integer.hashCode(nextRaidId++);
 
-        WorldManager.copyAndLoadWorld(instanceWorldName, templateWorldName, (newWorld) -> {
+        WorldManager.copyAndLoadWorld(instanceWorldName, templateWorldName, "raid", (newWorld) -> {
             if (newWorld == null) {
                 players.forEach(p -> p.sendMessage("§c레이드 입장에 실패했습니다. (월드 복사 오류)"));
                 WorldManager.unloadAnddeleteWorld(instanceWorldName);

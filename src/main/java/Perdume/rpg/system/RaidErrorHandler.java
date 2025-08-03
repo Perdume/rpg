@@ -1,8 +1,8 @@
 package Perdume.rpg.system; // 사용하시는 패키지 경로
 
 import Perdume.rpg.Rpg;
-import Perdume.rpg.raid.RaidInstance;
-import Perdume.rpg.util.ChatUtil;
+import Perdume.rpg.gamemode.raid.RaidInstance;
+import Perdume.rpg.core.util.ChatUtil;
 import org.bukkit.entity.Player;
 
 import java.io.File;

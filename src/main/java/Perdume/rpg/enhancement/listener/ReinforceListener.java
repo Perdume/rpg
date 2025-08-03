@@ -1,7 +1,7 @@
 package Perdume.rpg.enhancement.listener;
 
 import Perdume.rpg.Rpg;
-import Perdume.rpg.util.EquipmentStats;
+import Perdume.rpg.core.util.EquipmentStats;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;

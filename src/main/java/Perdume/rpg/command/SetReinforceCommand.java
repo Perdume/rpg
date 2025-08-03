@@ -1,6 +1,6 @@
 package Perdume.rpg.command;
 
-import Perdume.rpg.util.ReinforceUtil;
+import Perdume.rpg.core.util.ReinforceUtil;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;

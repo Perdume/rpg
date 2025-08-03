@@ -2,10 +2,10 @@ package Perdume.rpg.command;
 
 import Perdume.rpg.Rpg;
 import Perdume.rpg.system.TestDummyManager;
-import Perdume.rpg.world.manager.WorldManager;
-import org.bukkit.GameMode;
+import Perdume.rpg.world.WorldManager;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.WorldCreator;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -69,39 +69,38 @@ public class TestCommand implements CommandExecutor {
         player.sendMessage("§e대미지 테스트용 월드를 생성합니다...");
 
         // 1. 임시 템플릿을 만들고
-        WorldManager.createVoidTemplate(worldName);
+        WorldCreator wc = new WorldCreator(worldName);
+        wc.generator("VoidGen");
+        org.bukkit.World newWorld = wc.createWorld();
         // 2. 그 템플릿을 기반으로 테스트 월드를 로드
-        WorldManager.copyAndLoadWorld(worldName, worldName, (newWorld) -> {
-            if (newWorld == null) {
-                player.sendMessage("§c테스트 월드 생성에 실패했습니다.");
-                return;
+        if (newWorld == null) {
+            player.sendMessage("§c테스트 월드 생성에 실패했습니다.");
+            return;
+        }
+
+        // --- [핵심 수정] 30x30 발판 생성 로직 ---
+        player.sendMessage("§e테스트용 발판을 생성합니다...");
+        Location center = new Location(newWorld, 0, 64, 0);
+        for (int x = -15; x < 15; x++) {
+            for (int z = -15; z < 15; z++) {
+                center.clone().add(x, 0, z).getBlock().setType(Material.STONE_BRICKS); // 석재 벽돌로 생성
             }
+        }
 
-            // --- [핵심 수정] 30x30 발판 생성 로직 ---
-            player.sendMessage("§e테스트용 발판을 생성합니다...");
-            Location center = new Location(newWorld, 0, 64, 0);
-            for (int x = -15; x < 15; x++) {
-                for (int z = -15; z < 15; z++) {
-                    center.clone().add(x, 0, z).getBlock().setType(Material.STONE_BRICKS); // 석재 벽돌로 생성
-                }
-            }
+        originalLocations.put(player.getUniqueId(), player.getLocation());
+        Location spawnPoint = new Location(newWorld, 0.5, 65, 0.5);
+        player.teleport(spawnPoint);
 
-            originalLocations.put(player.getUniqueId(), player.getLocation());
-            Location spawnPoint = new Location(newWorld, 0.5, 65, 0.5);
-            player.teleport(spawnPoint);
-            player.setGameMode(GameMode.CREATIVE);
+        player.sendMessage("§a테스트 월드로 이동했습니다. 허수아비를 소환합니다.");
 
-            player.sendMessage("§a테스트 월드로 이동했습니다. 허수아비를 소환합니다.");
+        // 허수아비 소환
+        Location dummyLocation = spawnPoint.clone().add(0, 0, 5);
+        LivingEntity dummy = (LivingEntity) newWorld.spawnEntity(dummyLocation, entityType);
+        dummy.setAI(false);
+        dummy.setGravity(false);
+        dummy.setInvulnerable(true);
 
-            // 허수아비 소환
-            Location dummyLocation = spawnPoint.clone().add(0, 0, 5);
-            LivingEntity dummy = (LivingEntity) newWorld.spawnEntity(dummyLocation, entityType);
-            dummy.setAI(false);
-            dummy.setGravity(false);
-            dummy.setInvulnerable(true);
-
-            TestDummyManager.addDummy(dummy.getUniqueId());
-        });
+        TestDummyManager.addDummy(dummy.getUniqueId());
     }
 
     private void handleLeave(Player player) {
